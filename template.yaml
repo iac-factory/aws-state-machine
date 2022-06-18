@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+    aws-node-16-lambda-step-function
+
+    Sample SAM Template for aws-node-16-lambda-step-function
+
+Resources:
+    State:
+        Type: AWS::Serverless::StateMachine # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-statemachine.html
+        Properties:
+            DefinitionUri: state/validator.asl.json
+            DefinitionSubstitutions:
+                Queue: !GetAtt Queue.Arn
+                Approve: !GetAtt Approve.Arn
+                Failure: !GetAtt Failure.Arn
+                Update: !Sub arn:${AWS::Partition}:states:::dynamodb:putItem
+                Table: !Ref Table
+            Events:
+                Schedule:
+                    Type: Schedule # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-statemachine-schedule.html
+                    Properties:
+                        Description: Hourly Schedule
+                        Enabled: False # Disabled by Default
+                        Schedule: "rate(1 hour)"
+            Policies: 
+                - LambdaInvokePolicy:
+                    FunctionName: !Ref Queue
+                - LambdaInvokePolicy:
+                    FunctionName: !Ref Approve
+                - LambdaInvokePolicy:
+                    FunctionName: !Ref Failure
+                - DynamoDBWritePolicy:
+                    TableName: !Ref Table
+
+    Queue:
+        Type: AWS::Serverless::Function # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+        Properties:
+            CodeUri: functions/queue
+            Handler: index.handler
+            Runtime: nodejs16.x
+            Architectures:
+                - arm64
+
+    Approve:
+        Type: AWS::Serverless::Function
+        Properties:
+            CodeUri: functions/approve
+            Handler: index.handler
+            Runtime: nodejs16.x
+            Architectures:
+                - arm64
+
+    Failure:
+        Type: AWS::Serverless::Function
+        Properties:
+            CodeUri: functions/failure
+            Handler: index.handler
+            Runtime: nodejs16.x
+            Architectures:
+                - arm64
+
+    Table:
+        Type: AWS::Serverless::SimpleTable # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-simpletable.html
+        Properties:
+            PrimaryKey:
+                Name: Id
+                Type: String
+            ProvisionedThroughput:
+                ReadCapacityUnits: 1
+                WriteCapacityUnits: 1
+
+Outputs:
+    # StateSchedule is an implicit Schedule event rule created out of Events key under Serverless::StateMachine
+    # Find out more about other implicit resources you can reference within SAM
+    # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-specification-generated-resources.html
+    State:
+        Description: "State Machine ARN"
+        Value: !Ref State
+    Role:
+        Description: "IAM Role created for state machine based on the specified SAM Policy Templates"
+        Value: !GetAtt StateRole.Arn

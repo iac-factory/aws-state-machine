@@ -1,0 +1,94 @@
+{
+    "Comment": "...",
+    "StartAt": "Check Job Status",
+    "States": {
+        "Check Job Status": {
+            "Type": "Task",
+            "Resource": "${Queue}",
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "States.TaskFailed"
+                    ],
+                    "IntervalSeconds": 15,
+                    "MaxAttempts": 5,
+                    "BackoffRate": 1.5
+                }
+            ],
+            "Next": "Pass or Fail"
+        },
+        "Pass or Fail": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "Variable": "$.validation",
+                    "NumericLessThanEquals": 50,
+                    "Next": "Fail"
+                }
+            ],
+            "Default": "Pass"
+        },
+        "Pass": {
+            "Type": "Task",
+            "Resource": "${Approve}",
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "States.TaskFailed"
+                    ],
+                    "IntervalSeconds": 2,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 1
+                }
+            ],
+            "Next": "Record"
+        },
+        "Fail": {
+            "Type": "Task",
+            "Resource": "${Failure}",
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "States.TaskFailed"
+                    ],
+                    "IntervalSeconds": 2,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 1
+                }
+            ],
+            "Next": "Record"
+        },
+        "Record": {
+            "Type": "Task",
+            "Resource": "${Update}",
+            "Parameters": {
+                "TableName": "${Table}",
+                "Item": {
+                    "Id": {
+                        "S.$": "$.id"
+                    },
+                    "Type": {
+                        "S.$": "$.type"
+                    },
+                    "Score": {
+                        "N.$": "$.score"
+                    },
+                    "Timestamp": {
+                        "S.$": "$.timestamp"
+                    }
+                }
+            },
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "States.TaskFailed"
+                    ],
+                    "IntervalSeconds": 20,
+                    "MaxAttempts": 5,
+                    "BackoffRate": 10
+                }
+            ],
+            "End": true
+        }
+    }
+}
